@@ -112,36 +112,33 @@ export function nargsEquals(n: number): (n: number) => boolean {
 }
 
 export function func(
-    L: lua_State,
     h: string,
     n: number,
-    call: () => number
-): (o: lua_State) => number;
+    call: (L: lua_State) => number
+): (L: lua_State) => number;
 
 export function func(
-    L: lua_State,
     h: string,
     check: (n: number) => boolean,
-    call: () => number
-): (o: lua_State) => number;
+    call: (L: lua_State) => number
+): (L: lua_State) => number;
 
 export function func(
-    L: lua_State,
     h: string,
     n: number | ((n: number) => boolean),
-    call: () => number
-): (o: lua_State) => number {
+    call: (L: lua_State) => number
+): (L: lua_State) => number {
     if (typeof n === "number") {
         n = nargsEquals(n);
     }
 
-    return (_: lua_State) => {
+    return (L: lua_State) => {
         const size = nargs(L);
         if (!(n as any)(size)) {
             return lauxlib.luaL_error(to_luastring(h));
         }
 
-        return call();
+        return call(L);
     };
 }
 
