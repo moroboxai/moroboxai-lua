@@ -21,7 +21,10 @@ export function pushstring(L: lua_State, s: string): void {
 
 export function pushobject(L: lua_State, o: object): void {}
 
-export function push(L: lua_State, o: any): void {
+export function push(
+    L: lua_State,
+    o: boolean | number | string | object
+): void {
     if (typeof o === "boolean") {
         pushboolean(L, o);
     } else if (typeof o === "number") {
@@ -165,7 +168,7 @@ class VM implements IVM {
  * @returns {any} - new Lua VM
  */
 export function initLua(options: {
-    globals?: { [key: string]: any };
+    globals?: { [key: string]: boolean | number | string | object };
     api?: { [key: string]: (o: lua_State) => number };
     script?: string;
 }): IVM | undefined {
