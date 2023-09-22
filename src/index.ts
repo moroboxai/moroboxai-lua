@@ -19,18 +19,31 @@ export function pushstring(L: lua_State, s: string): void {
     lua.lua_pushstring(L, to_luastring(s));
 }
 
-export function pushobject(L: lua_State, o: object): void {}
+export function pusharray(L: lua_State, s: any[]): void {
+    lua.lua_newtable(L);
+    s.forEach((val, index) => {
+        push(L, val);
+        lua.lua_rawseti(L, -2, index + 1);
+    });
+}
 
-export function push(
-    L: lua_State,
-    o: boolean | number | string | object
-): void {
+export function pushobject(L: lua_State, o: object): void {
+    lua.lua_newtable(L);
+    Object.entries(o).forEach(([key, value]) => {
+        push(L, value);
+        lua.lua_setfield(L, -2, key);
+    });
+}
+
+export function push(L: lua_State, o: any): void {
     if (typeof o === "boolean") {
         pushboolean(L, o);
     } else if (typeof o === "number") {
         pushnumber(L, o);
     } else if (typeof o === "string") {
         pushstring(L, o);
+    } else if (Array.isArray(o)) {
+        pusharray(L, o);
     } else if (typeof o === "object") {
         pushobject(L, o);
     } else {
@@ -51,7 +64,63 @@ export function getstring(L: lua_State, i: number): string {
 }
 
 export function getobject(L: lua_State, i: number): any {
-    return lua.lua_touserdata(L, i);
+    lua.lua_pushnil(L); /* first key */
+
+    const d: { [key: string]: any } = {};
+    while (lua.lua_next(L, -2) != 0) {
+        /* uses 'key' (at index -2) and 'value' (at index -1) */
+        d[getstring(L, -2)] = get(L, -1);
+        /* removes 'value'; keeps 'key' for next iteration */
+        lua.lua_pop(L, 1);
+    }
+
+    return d;
+}
+
+export function gettable(L: lua_State, i: number): any {
+    const len = lua.lua_rawlen(L, i);
+    if (len === 0) {
+        return getobject(L, i);
+    }
+
+    const a: any[] = [];
+    for (let j = 0; j < len; ++j) {
+        lua.lua_rawgeti(L, -1, j + 1);
+        if (lua.lua_isnil(L, -1)) {
+            // Try to read an object
+            lua.lua_pop(L, 1);
+            return getobject(L, i);
+        }
+
+        a.push(get(L, -1));
+        lua.lua_pop(L, 1);
+    }
+
+    return a;
+}
+
+export function popstring(L: lua_State): string {
+    return lua.lua_tojsstring(L, -1);
+}
+
+export function pop(L: lua_State): any {
+    return get(L, -1);
+}
+
+export function get(L: lua_State, i: number): any {
+    if (lua.lua_isnil(L, i)) {
+        return undefined;
+    } else if (lua.lua_isboolean(L, i)) {
+        return getboolean(L, i);
+    } else if (lua.lua_isnumber(L, i)) {
+        return getnumber(L, i);
+    } else if (lua.lua_isstring(L, i)) {
+        return getstring(L, i);
+    } else if (lua.lua_istable(L, i)) {
+        return gettable(L, i);
+    } else {
+        throw `unknown type ${lua.lua_typename(L, lua.lua_type(L, i))}`;
+    }
 }
 
 export function nargs(L: lua_State): number {
@@ -142,6 +211,19 @@ export function func(
     };
 }
 
+export function call(L: lua_State, name: string, ...args: any[]) {
+    lua.lua_getglobal(L, to_luastring(name, true));
+    args.forEach((arg) => {
+        push(L, arg);
+    });
+    if (lua.lua_call(L, args.length, 1) !== lua.LUA_OK) {
+        const err = getstring(L, -1);
+        if (err) {
+            throw new Error(err);
+        }
+    }
+}
+
 export interface IVM {
     // State of the VM
     readonly luaState: lua_State;
@@ -178,15 +260,17 @@ export function initLua(options: {
 
     if (options.globals !== undefined) {
         Object.entries(options.globals).forEach(([key, value]) => {
+            console.log("register Lua global", key);
             setnameval(key, value);
         });
     }
 
     if (options.api !== undefined) {
         Object.entries(options.api).forEach(([k, v]) => {
-            lua.lua_register(luaState, k, (_: lua_State) => {
+            console.log("register Lua api", k);
+            lua.lua_register(luaState, k, (L: lua_State) => {
                 try {
-                    return v(_);
+                    return v(L);
                 } catch (e) {
                     throw new Error(`error in ${k} implementation: ${e}`);
                 }

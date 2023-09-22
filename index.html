@@ -1,0 +1,62 @@
+<html>
+    <head>
+        <title>MoroboxAILua Sample</title>
+    </head>
+
+    <body class="horizontal">
+        <div class="vertical" id="logs">
+        </div>
+    </body>
+    <script type="module">
+        import * as MoroboxAILua from "./src/index";
+
+        const logs = document.getElementById("logs");
+
+        const vm = MoroboxAILua.initLua({
+            api: {
+                print: MoroboxAILua.func("print(state)", 1, (luaState) => {
+                    const div = document.createElement("div");
+                    div.innerText = JSON.stringify(MoroboxAILua.pop(luaState));
+                    logs.appendChild(div);
+                    return 0;
+                })
+            },
+            script: "function inputs(state) print(\"Hello from Lua\") print(state); end"
+        })
+
+        MoroboxAILua.call(vm.luaState, "inputs", {
+            b: true,
+            n: 1,
+            s: "hello",
+            a: [true, 1, "hello"],
+            o: {
+                b: false,
+                n: 2,
+                a: [true, 1, "hello"],
+                s: "world"
+            }
+        });
+    </script>
+
+    <style>
+        body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        .vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .horizontal {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</html>
