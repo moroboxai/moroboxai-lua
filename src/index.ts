@@ -104,7 +104,9 @@ export function popstring(L: lua_State): string {
 }
 
 export function pop(L: lua_State): any {
-    return get(L, -1);
+    const val = get(L, -1);
+    lua.lua_pop(L, 1);
+    return val;
 }
 
 export function get(L: lua_State, i: number): any {
