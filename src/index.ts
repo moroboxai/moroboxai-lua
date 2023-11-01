@@ -2,6 +2,7 @@ export const VERSION = "__VERSION__";
 import {
     lua_State,
     lua,
+    lualib,
     lauxlib,
     to_luastring,
     to_jsstring
@@ -243,22 +244,68 @@ class VM implements IVM {
     }
 }
 
+function loadLib(luaState: lua_State) {
+    const libs: { [key: string]: any } = {
+        _G: lualib.luaopen_base,
+        package: lualib.luaopen_package,
+        coroutine: lualib.luaopen_coroutine,
+        debug: lualib.luaopen_debug,
+        math: lualib.luaopen_math,
+        string: lualib.luaopen_string,
+        table: lualib.luaopen_table
+    };
+
+    for (const name in libs) {
+        lauxlib.luaL_requiref(
+            luaState,
+            to_luastring(name, true),
+            libs[name],
+            1
+        );
+    }
+}
+
+/**
+ * Options for initLua.
+ */
+export interface InitLuaOptions {
+    // Builtin globals
+    globals?: { [key: string]: boolean | number | string | object };
+    // Builtin functions
+    api?: { [key: string]: (o: lua_State) => number };
+    // Override LUA_PATH
+    path?: string;
+    // Entrypoint
+    script?: string;
+}
+
 /**
  * Initialize a new Lua VM for running a script.
- * @param {object} options - options for the VM
+ * @param {InitLuaOptions} options - options for the VM
  * @returns {any} - new Lua VM
  */
-export function initLua(options: {
-    globals?: { [key: string]: boolean | number | string | object };
-    api?: { [key: string]: (o: lua_State) => number };
-    script?: string;
-}): IVM | undefined {
+export function initLua(options: InitLuaOptions): IVM | undefined {
     const luaState: lua_State = lauxlib.luaL_newstate();
 
     const setnameval = function (name: string, val: any) {
         push(luaState, val);
         lua.lua_setglobal(luaState, to_luastring(name));
     };
+
+    // Load builin libs
+    loadLib(luaState);
+
+    // With MoroboxAI, lua scripts are served from remote URLs.
+    // We need to fix package.path so that it fetches the lua scripts
+    // from the remore URL rather than the URL MoroboxAI is running at.
+    let path = options.path ?? "./";
+    if (!path.endsWith("/")) {
+        path = path + "/";
+    }
+    lua.lua_getglobal(luaState, "package");
+    lua.lua_pushstring(luaState, to_luastring(`${path}?.lua`, true));
+    lua.lua_setfield(luaState, -2, to_luastring("path"));
+    lua.lua_pop(luaState, 1);
 
     if (options.globals !== undefined) {
         Object.entries(options.globals).forEach(([key, value]) => {

@@ -4,8 +4,7 @@
     </head>
 
     <body class="horizontal">
-        <div class="vertical" id="logs">
-        </div>
+        <div class="vertical" id="logs"></div>
     </body>
     <script type="module">
         import * as MoroboxAILua from "./src/index";
@@ -21,8 +20,8 @@
                     return 0;
                 })
             },
-            script: "function inputs(state) print(\"Hello from Lua\") print(state); end"
-        })
+            script: 'require "main"'
+        });
 
         MoroboxAILua.call(vm.luaState, "inputs", {
             b: true,
